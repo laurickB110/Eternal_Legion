@@ -26,9 +26,7 @@ public class TurnSystem : MonoBehaviour
 
     public TextMeshProUGUI turnText;
     private int maxMana;
-    private int currentMana; // Player mana
-    private int opponentMaxMana;
-    private int opponentCurrentMana;
+    private int currentMana;
     public TextMeshProUGUI manaText;
 
     public bool startTurn;
@@ -41,8 +39,6 @@ public class TurnSystem : MonoBehaviour
 
         maxMana = 1;
         currentMana = 1;
-        opponentMaxMana = 1;
-        opponentCurrentMana = 1;
 
         startTurn = false;
         TimerManager.Instance.StartTurnTimer();
@@ -51,7 +47,7 @@ public class TurnSystem : MonoBehaviour
     void Update()
     {
         turnText.text = isYourTurn ? "Your Turn" : "Opponent Turn";
-        manaText.text = (isYourTurn ? currentMana : opponentCurrentMana).ToString();
+        manaText.text = currentMana.ToString();
     }
 
     public void EndTurn()
@@ -60,19 +56,14 @@ public class TurnSystem : MonoBehaviour
         {
             TimerManager.Instance.StopTurnTimer();
             HandManager.Instance.EndPlayerTurn();
-            BoardManager.Instance.MobsCanMove(false);
+            BoardManager.Instance.EndTurn(); ;
             OpponentTurn += 1;
-
-            // Start opponent turn: increase opponent mana and run simple AI
-            if (opponentMaxMana < 8) opponentMaxMana += 1;
-            opponentCurrentMana = opponentMaxMana;
-            EternalLegion.AI.OpponentAI.TryStartOpponentTurn();
         }
         else
         {
             TimerManager.Instance.StartTurnTimer();
             HandManager.Instance.StartPlayerTurn();
-            BoardManager.Instance.MobsCanMove(true);
+            BoardManager.Instance.StartTurn();
             yourTurn += 1;
             if (maxMana < 8)
             {
@@ -87,9 +78,9 @@ public class TurnSystem : MonoBehaviour
     }
     public void UseMana(int amount)
     {
-        if (isYourTurn) currentMana -= amount; else opponentCurrentMana -= amount;
+        currentMana -= amount;
     }
-    public int GetMana(){ return isYourTurn ? currentMana : opponentCurrentMana; }
-    public int GetOpponentMana(){ return opponentCurrentMana; }
-    public void UseOpponentMana(int amount){ opponentCurrentMana -= amount; }
+    public int GetMana(){
+        return currentMana;
+    }
 }

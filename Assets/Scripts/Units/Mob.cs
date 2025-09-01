@@ -1,8 +1,11 @@
 using UnityEngine;
 using System.Collections;
+using TMPro;
 
 public class Mob : MonoBehaviour
 {
+    [SerializeField] TextMeshProUGUI healthText;
+    [SerializeField] TextMeshProUGUI attackText;
     private int id;
     private string mobName;
     private int attack;
@@ -10,8 +13,15 @@ public class Mob : MonoBehaviour
     private string mobDescription;
 
     private int movementRange = 2;
+    private int attackRange = 1;
 
     private bool canMove = false;
+    private bool onMove = false;
+
+    private bool canAttack = false;
+    private bool onAttack = false;
+
+    private bool firstTurn = true;
 
     private Case currentCase;
 
@@ -29,12 +39,21 @@ public class Mob : MonoBehaviour
         mobDescription = MobDescription;
     }
 
-    public void OnClickFromChild()
+    public void OnClickForMove()
     {
         if (BoardManager.Instance.IsInAction()) return;
-        if(!canMove) return;
+        if (!canMove) return;
         BoardManager.Instance.SetSelectedMob(this);
         BoardManager.Instance.HighlightMovableCells(transform.position, movementRange);
+        BoardManager.Instance.SetClickedThisFrame(true);
+    }
+
+    public void OnClickForAttack()
+    {
+        if (BoardManager.Instance.IsInAction()) return;
+        if (!canAttack) return;
+        BoardManager.Instance.SetSelectedMob(this);
+        BoardManager.Instance.HighlightAttackableCells(transform.position, attackRange);
         BoardManager.Instance.SetClickedThisFrame(true);
     }
 
@@ -70,9 +89,38 @@ public class Mob : MonoBehaviour
         moveCoroutine = null; // Reset
     }
 
+    public void AttackMob(Mob target)
+    {
+        if (target == null) return;
+
+        target.SetHealth(target.GetHealth() - attack);
+        if (target.GetHealth() <= 0)
+        {
+            // Le mob est mort, gérer la suppression
+            if (target.GetCurrentCase() != null)
+            {
+                target.GetCurrentCase().SetOccupied(false, null);
+                target.RemoveFromList();
+            }
+        }
+    }
+
+    public void RemoveFromList()
+    {
+        BoardManager.Instance.RemoveMobFromBoard(this.gameObject);
+        BoardManager.Instance.RemoveMobFromRedTeam(this.gameObject);
+        BoardManager.Instance.RemoveMobFromBlueTeam(this.gameObject);
+        Destroy(this.gameObject);
+    }   
+
     public int GetMovementRange()
     {
         return movementRange;
+    }
+
+    public int GetAttackRange()
+    {
+        return attackRange;
     }
 
     public void SetCurrentCase(Case newCase)
@@ -95,4 +143,96 @@ public class Mob : MonoBehaviour
     {
         canMove = state;
     }
+
+    public bool CanMove()
+    {
+        return canMove;
+    }
+
+    public bool CanAttack()
+    {
+        return canAttack;
+    }
+
+    public void SetCanAttack(bool state)
+    {
+        canAttack = state;
+    }
+
+    public int GetHealth()
+    {
+        return health;
+    }
+
+    public void SetHealth(int value)
+    {
+        health = value;
+    }
+
+    public int GetAttack()
+    {
+        return attack;
+    }
+
+    public void SetAttack(int value)
+    {
+        attack = value;
+    }
+
+    public bool IsFirstTurn()
+    {
+        return firstTurn;
+    }
+
+    public void SetFirstTurn(bool state)
+    {
+        firstTurn = state;
+    }
+
+    public bool GetFirstTurn()
+    {
+        return firstTurn;
+    }
+
+    public bool IsOnMove()
+    {
+        return onMove;
+    }
+
+    public void SetOnMove(bool state)
+    {
+        onMove = state;
+    }
+
+    public bool IsOnAttack()
+    {
+        return onAttack;
+    }
+
+    public void SetOnAttack(bool state)
+    {
+        onAttack = state;
+    }
+
+    public void EndOfTurn()
+    {
+        canMove = false;
+        canAttack = false;
+        firstTurn = false;
+    }
+
+    public void StartOfTurn()
+    {
+        canMove = true;
+        canAttack = true;
+    }
+
+    void Update()
+        {
+            if (healthText != null)
+                healthText.text = health.ToString();
+            if (attackText != null)
+                attackText.text = attack.ToString();
+        }
 }
+

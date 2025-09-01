@@ -4,6 +4,7 @@ public class Case : MonoBehaviour
 {
     [SerializeField] GameObject hoveredTrue;
     [SerializeField] GameObject hoveredFalse;
+    [SerializeField] GameObject highlightedAttack;
     private bool isOccupied = false;
     private Mob mob;
 
@@ -29,6 +30,18 @@ public class Case : MonoBehaviour
         }
     }
 
+    public void HighlightAsAttackable(bool highlight)
+    {
+        if (highlight)
+        {
+            highlightedAttack.SetActive(true);
+        }
+        else
+        {
+            highlightedAttack.SetActive(false);
+        }
+    }
+
     public void SetOccupied(bool state, Mob mob)
     {
         isOccupied = state;
@@ -38,5 +51,10 @@ public class Case : MonoBehaviour
     public bool IsOccupied()
     {
         return isOccupied;
+    }
+
+    public Mob GetOccupyingMob()
+    {
+        return mob;
     }
 }

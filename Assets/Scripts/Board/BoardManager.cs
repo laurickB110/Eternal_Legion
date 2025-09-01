@@ -4,12 +4,10 @@ using System.Collections.Generic;
 public class BoardManager : MonoBehaviour
 {
     public static BoardManager Instance { get; private set; }
-    public enum Team { Blue, Red }
 
     [SerializeField] GameObject[] cases;
     [SerializeField] GameObject redBase;
     [SerializeField] GameObject blueBase;
-    [SerializeField] int baseRestrictedRadiusCells = 1; // cells around each base where units cannot enter
 
     private List<GameObject> redTeam = new List<GameObject>();
     private List<GameObject> blueTeam = new List<GameObject>();
@@ -50,6 +48,25 @@ public class BoardManager : MonoBehaviour
         DisableCollidersMobs();
     }
 
+    public void HighlightAttackableCells(Vector3 mobPos, int range)
+    {
+        float caseSize = 2f;
+        foreach (GameObject c in cases)
+        {
+            Vector3 cellPos = c.transform.position;
+            int distX = Mathf.Abs(Mathf.RoundToInt((mobPos.x - cellPos.x) / caseSize));
+            int distZ = Mathf.Abs(Mathf.RoundToInt((mobPos.z - cellPos.z) / caseSize));
+
+            int manhattanDistance = distX + distZ;
+
+            if (manhattanDistance <= range && c.GetComponent<Case>() != selectedMob.GetCurrentCase())
+            {
+                c.GetComponent<Case>().HighlightAsAttackable(true);
+            }
+        }
+        DisableCollidersMobs();
+    }
+
     public void ClearHighlights()
     {
         foreach (GameObject c in cases)
@@ -58,12 +75,19 @@ public class BoardManager : MonoBehaviour
         }
     }
 
+    public void ClearAttackHighlights()
+    {
+        foreach (GameObject c in cases)
+        {
+            c.GetComponent<Case>().HighlightAsAttackable(false);
+        }
+    }
+
     public void EnableCollidersMobs()
     {
         foreach (GameObject mob in allMobs)
         {
             Collider mobCollider = mob.GetComponentInChildren<Collider>();
-            Debug.Log(mobCollider);
             if (mobCollider != null)
             {
                 mobCollider.enabled = true;
@@ -85,44 +109,49 @@ public class BoardManager : MonoBehaviour
 
     public void MobsCanMove(bool state)
     {
-        // Only allow player's units (Blue) to be clicked/moved
-        foreach (GameObject mob in blueTeam)
+        foreach (GameObject mob in allMobs)
         {
-            if (mob == null) continue;
-            var m = mob.GetComponent<Mob>();
-            if (m != null) m.SetCanMove(state);
-        }
-        foreach (GameObject mob in redTeam)
-        {
-            if (mob == null) continue;
-            var m = mob.GetComponent<Mob>();
-            if (m != null) m.SetCanMove(false);
+            mob.GetComponent<Mob>().SetCanMove(state);
         }
     }
 
     public void AddMobToBoard(GameObject mob)
     {
-        // Default to Blue team for backward compatibility
-        AddMobToBoard(mob, Team.Blue);
+        allMobs.Add(mob);
     }
 
-    public void AddMobToBoard(GameObject mob, Team team)
+    public void AddMobToRedTeam(GameObject mob)
     {
-        if (mob == null) return;
-        if (!allMobs.Contains(mob)) allMobs.Add(mob);
-        if (team == Team.Blue)
+        redTeam.Add(mob);
+    }
+
+    public void AddMobToBlueTeam(GameObject mob)
+    {
+        blueTeam.Add(mob);
+    }
+
+    public void RemoveMobFromBoard(GameObject mob)
+    {
+        if (allMobs.Contains(mob))
         {
-            if (!blueTeam.Contains(mob)) blueTeam.Add(mob);
-        }
-        else
-        {
-            if (!redTeam.Contains(mob)) redTeam.Add(mob);
+            allMobs.Remove(mob);    
         }
     }
 
-    public System.Collections.Generic.IReadOnlyList<GameObject> GetTeam(Team team)
+    public void RemoveMobFromRedTeam(GameObject mob)
     {
-        return team == Team.Blue ? (System.Collections.Generic.IReadOnlyList<GameObject>)blueTeam : redTeam;
+        if (redTeam.Contains(mob))
+        {
+            redTeam.Remove(mob);    
+        }
+    }
+
+    public void RemoveMobFromBlueTeam(GameObject mob)
+    {
+        if (blueTeam.Contains(mob))
+        {
+            blueTeam.Remove(mob); 
+        }
     }
 
     public bool IsInAction()
@@ -140,152 +169,95 @@ public class BoardManager : MonoBehaviour
         wasClickedThisFrame = state;
     }
 
+    public void EndTurn()
+    {
+        foreach (GameObject mob in blueTeam)
+        {
+            mob.GetComponent<Mob>().EndOfTurn();
+
+        }
+        UIManager.Instance.HideMenu();
+    }
+
+    public void StartTurn()
+    {
+        foreach (GameObject mob in blueTeam)
+        {
+            mob.GetComponent<Mob>().StartOfTurn();
+        }
+    }
+
     void Update()
     {
         if (Input.GetMouseButtonDown(0))
         {
             if (selectedMob == null) return;
-            if (wasClickedThisFrame)
-            {
-                wasClickedThisFrame = false;
-                return; // Ignore ce clic dans Update car déjà traité
-            }
 
-            float caseSize = 2f;
-
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit))
+            if (selectedMob.IsOnMove())
             {
-                GameObject caseTouched = hit.collider.gameObject;
-                if (hit.collider.name.StartsWith("Case"))
+                float caseSize = 2f;
+
+                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                if (Physics.Raycast(ray, out RaycastHit hit))
                 {
-                    Vector3 mobPos = selectedMob.transform.position;
-                    Vector3 targetPos = hit.collider.transform.position;
-
-                    int distX = Mathf.Abs(Mathf.RoundToInt((mobPos.x - targetPos.x) / caseSize));
-                    int distZ = Mathf.Abs(Mathf.RoundToInt((mobPos.z - targetPos.z) / caseSize));
-                    int manhattanDist = distX + distZ;
-
-                    var targetCase = caseTouched.GetComponent<Case>();
-                    if (manhattanDist <= selectedMob.GetMovementRange() && !targetCase.IsOccupied() && !IsBaseRestrictedCase(targetCase))
+                    GameObject caseTouched = hit.collider.gameObject;
+                    if (hit.collider.name.StartsWith("Case"))
                     {
-                        selectedMob.MoveTo(targetPos + new Vector3(0, 1, 0)); // léger offset en Y
-                        selectedMob.SetCurrentCase(targetCase);
-                        selectedMob.SetCanMove(false);
+                        Vector3 mobPos = selectedMob.transform.position;
+                        Vector3 targetPos = hit.collider.transform.position;
+
+                        int distX = Mathf.Abs(Mathf.RoundToInt((mobPos.x - targetPos.x) / caseSize));
+                        int distZ = Mathf.Abs(Mathf.RoundToInt((mobPos.z - targetPos.z) / caseSize));
+                        int manhattanDist = distX + distZ;
+
+                        if (manhattanDist <= selectedMob.GetMovementRange() && !caseTouched.GetComponent<Case>().IsOccupied())
+                        {
+                            selectedMob.MoveTo(targetPos + new Vector3(0, 1, 0)); // léger offset en Y
+                            selectedMob.SetCurrentCase(caseTouched.GetComponent<Case>());
+                            selectedMob.SetCanMove(false);
+                        }
                     }
                 }
+                selectedMob.SetOnMove(false);
+                selectedMob = null;
+                ClearHighlights();
+                EnableCollidersMobs();
             }
-            selectedMob = null;
-            ClearHighlights();
-            EnableCollidersMobs();
-        }
-    }
-
-    // --- Helpers for AI ---
-    private const float CellSize = 2f;
-
-    public Case FindBestSpawnCase(Team team)
-    {
-        Vector3 origin = team == Team.Red ? redBase.transform.position : blueBase.transform.position;
-        float best = float.MaxValue;
-        Case bestCase = null;
-        foreach (GameObject c in cases)
-        {
-            var caseComp = c.GetComponent<Case>();
-            if (caseComp == null || caseComp.IsOccupied() || IsBaseRestrictedCase(caseComp)) continue;
-            float d = Vector3.SqrMagnitude(c.transform.position - origin);
-            if (d < best)
+            
+            else if (selectedMob.IsOnAttack())
             {
-                best = d;
-                bestCase = caseComp;
-            }
-        }
-        return bestCase;
-    }
+                float caseSize = 2f;
 
-    // Find a free case at Manhattan distance in [minRange, maxRange] from any enemy unit
-    public Case FindSpawnNearEnemies(Team myTeam, Team enemyTeam, int minRange, int maxRange)
-    {
-        var enemies = GetTeam(enemyTeam);
-        if (enemies == null || enemies.Count == 0) return null;
-
-        Case best = null;
-        int bestDist = int.MaxValue;
-        foreach (var go in cases)
-        {
-            var cc = go.GetComponent<Case>();
-            if (cc == null || cc.IsOccupied() || IsBaseRestrictedCase(cc)) continue;
-
-            int closest = int.MaxValue;
-            for (int i = 0; i < enemies.Count; i++)
-            {
-                var e = enemies[i];
-                if (e == null) continue;
-                var ec = FindCaseAtPosition(e.transform.position);
-                if (ec == null) continue;
-                int d = ManhattanCells(go.transform.position, ec.transform.position);
-                if (d < closest) closest = d;
-            }
-
-            if (closest >= minRange && closest <= maxRange)
-            {
-                if (closest < bestDist)
+                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                if (Physics.Raycast(ray, out RaycastHit hit))
                 {
-                    bestDist = closest;
-                    best = cc;
+                    GameObject caseTouched = hit.collider.gameObject;
+                    if (hit.collider.name.StartsWith("Case"))
+                    {
+                        Vector3 mobPos = selectedMob.transform.position;
+                        Vector3 targetPos = hit.collider.transform.position;
+
+                        int distX = Mathf.Abs(Mathf.RoundToInt((mobPos.x - targetPos.x) / caseSize));
+                        int distZ = Mathf.Abs(Mathf.RoundToInt((mobPos.z - targetPos.z) / caseSize));
+                        int manhattanDist = distX + distZ;
+
+                        if (manhattanDist <= selectedMob.GetAttackRange() && caseTouched.GetComponent<Case>().IsOccupied() && caseTouched.GetComponent<Case>() != selectedMob.GetCurrentCase())
+                        {
+                            // Mettre ici la logique pour l'attaque
+                            Mob targetMob = caseTouched.GetComponent<Case>().GetOccupyingMob();
+                            selectedMob.AttackMob(targetMob);
+                            Debug.Log($"{selectedMob.name} attaque la case en {targetPos}");
+                            selectedMob.SetCanAttack(false);
+                        }
+                    }
                 }
+                selectedMob.SetOnAttack(false);
+                selectedMob = null;
+                ClearAttackHighlights();
+                EnableCollidersMobs();
             }
+
+
         }
-
-        return best;
-    }
-
-    private int ManhattanCells(Vector3 a, Vector3 b)
-    {
-        int dx = Mathf.Abs(Mathf.RoundToInt((a.x - b.x) / CellSize));
-        int dz = Mathf.Abs(Mathf.RoundToInt((a.z - b.z) / CellSize));
-        return dx + dz;
-    }
-
-    public bool IsBaseRestrictedCase(Case c)
-    {
-        if (c == null) return false;
-        Vector3 p = c.transform.position;
-        int dBlue = ManhattanCells(p, blueBase.transform.position);
-        int dRed  = ManhattanCells(p, redBase.transform.position);
-        return (dBlue <= baseRestrictedRadiusCells) || (dRed <= baseRestrictedRadiusCells);
-    }
-
-    public Case FindStepToward(Vector3 from, Vector3 to)
-    {
-        // One-step Manhattan move toward target on free cell
-        Vector3 dir = to - from;
-        Vector3 step = Vector3.zero;
-        if (Mathf.Abs(dir.x) >= Mathf.Abs(dir.z))
-            step = new Vector3(Mathf.Sign(dir.x) * CellSize, 0, 0);
-        else
-            step = new Vector3(0, 0, Mathf.Sign(dir.z) * CellSize);
-
-        // Try primary axis then the other if blocked
-        Vector3[] candidates = new Vector3[] { from + step, from + new Vector3(0,0, Mathf.Sign(dir.z) * CellSize), from + new Vector3(Mathf.Sign(dir.x) * CellSize,0,0) };
-        foreach (var p in candidates)
-        {
-            var c = FindCaseAtPosition(p);
-            if (c != null && !c.IsOccupied() && !IsBaseRestrictedCase(c)) return c;
-        }
-        return null;
-    }
-
-    public Case FindCaseAtPosition(Vector3 pos)
-    {
-        foreach (GameObject c in cases)
-        {
-            // Compare on XZ plane; ignore Y offset between mob (y=1) and case (y=0)
-            var a = new Vector2(c.transform.position.x, c.transform.position.z);
-            var b = new Vector2(pos.x, pos.z);
-            if (Vector2.Distance(a, b) < 0.6f)
-                return c.GetComponent<Case>();
-        }
-        return null;
     }
 }

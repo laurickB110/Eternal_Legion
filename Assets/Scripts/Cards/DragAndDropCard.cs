@@ -133,8 +133,7 @@ public class DragAndDropCard : MonoBehaviour, IBeginDragHandler, IDragHandler, I
         {
             if (lastCaseTouched != null)
             {
-                var lastCaseComp = lastCaseTouched.GetComponent<Case>();
-                if (lastCaseComp.IsOccupied() || BoardManager.Instance.IsBaseRestrictedCase(lastCaseComp))
+                if (lastCaseTouched.GetComponent<Case>().IsOccupied())
                 {
                     this.transform.position = originalPosition; // Reset position if not dropped on a valid target
                     this.transform.localScale = originalScale;
@@ -145,9 +144,10 @@ public class DragAndDropCard : MonoBehaviour, IBeginDragHandler, IDragHandler, I
                 {
                     TurnSystem.Instance.UseMana(dataCard.GetCost());
                     HandManager.Instance.RemoveCard(this.gameObject);
-                    lastCaseComp.SetOccupied(true, instanceMob.GetComponent<Mob>());
-                    BoardManager.Instance.AddMobToBoard(instanceMob, BoardManager.Team.Blue);
-                    instanceMob.GetComponent<Mob>().SetCurrentCase(lastCaseComp);
+                    lastCaseTouched.GetComponent<Case>().SetOccupied(true, instanceMob.GetComponent<Mob>());
+                    BoardManager.Instance.AddMobToBoard(instanceMob);
+                    BoardManager.Instance.AddMobToBlueTeam(instanceMob);
+                    instanceMob.GetComponent<Mob>().SetCurrentCase(lastCaseTouched.GetComponent<Case>());
                 }
             }
         }
