@@ -205,7 +205,7 @@ public class EnemyAIController : MonoBehaviour
             var next = ChooseStepTowards(current, targetMob.GetCurrentCase());
             if (next != null && !next.IsOccupied() && !boardManager.IsBaseCase(next))
             {
-                m.MoveTo(next.transform.position + new Vector3(0, 1, 0));
+                m.MoveTo(next.transform.position + new Vector3(0, 0.5f, 0));
                 m.SetCurrentCase(next);
                 m.SetCanMove(false);
                 if (debugAI) Debug.Log($"[AI] {m.name} moves to {next.transform.position}");

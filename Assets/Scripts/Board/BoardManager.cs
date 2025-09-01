@@ -178,7 +178,7 @@ public class BoardManager : MonoBehaviour
         if (targetCase.IsOccupied()) return null;
         if (IsBaseCase(targetCase)) return null;
 
-        GameObject instance = Instantiate(mobPrefab, targetCase.transform.position + new Vector3(0, 1, 0), Quaternion.identity);
+        GameObject instance = Instantiate(mobPrefab, targetCase.transform.position + new Vector3(0, 0.5f, 0), Quaternion.identity);
         var mobComp = instance.GetComponent<Mob>();
         if (mobComp != null)
         {
