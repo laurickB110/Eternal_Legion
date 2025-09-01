@@ -2,6 +2,8 @@ using UnityEngine;
 using System.Collections;
 using TMPro;
 
+public enum Team { Blue, Red }
+
 public class Mob : MonoBehaviour
 {
     [SerializeField] TextMeshProUGUI healthText;
@@ -28,6 +30,8 @@ public class Mob : MonoBehaviour
     private float moveSpeed = 5f;
 
     private Coroutine moveCoroutine;
+
+    public Team Team;
 
 
     public void Initialize(int Id, string MobName, int Attack, int Health, string MobDescription)

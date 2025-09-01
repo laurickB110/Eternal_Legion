@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -31,6 +32,10 @@ public class TurnSystem : MonoBehaviour
 
     public bool startTurn;
 
+    public enum PlayerSide { Blue, Red }
+    public static event Action<PlayerSide> OnTurnStarted;
+    public static event Action<PlayerSide> OnTurnEnded;
+
     void Start()
     {
         isYourTurn = true;
@@ -42,6 +47,9 @@ public class TurnSystem : MonoBehaviour
 
         startTurn = false;
         TimerManager.Instance.StartTurnTimer();
+
+        // Notify Blue turn start at game begin
+        OnTurnStarted?.Invoke(PlayerSide.Blue);
     }
 
     void Update()
@@ -54,13 +62,23 @@ public class TurnSystem : MonoBehaviour
     {
         if (isYourTurn)
         {
+            // Blue ends turn
+            OnTurnEnded?.Invoke(PlayerSide.Blue);
             TimerManager.Instance.StopTurnTimer();
             HandManager.Instance.EndPlayerTurn();
-            BoardManager.Instance.EndTurn(); ;
+            BoardManager.Instance.EndTurn();
             OpponentTurn += 1;
+
+            // Switch to Red turn
+            isYourTurn = false;
+            // Reset mana for opponent side as well
+            currentMana = maxMana;
+            OnTurnStarted?.Invoke(PlayerSide.Red);
         }
         else
         {
+            // Red ends turn
+            OnTurnEnded?.Invoke(PlayerSide.Red);
             TimerManager.Instance.StartTurnTimer();
             HandManager.Instance.StartPlayerTurn();
             BoardManager.Instance.StartTurn();
@@ -72,9 +90,11 @@ public class TurnSystem : MonoBehaviour
             currentMana = maxMana;
 
             startTurn = true;
-        }
 
-        isYourTurn = !isYourTurn;
+            // Switch to Blue turn
+            isYourTurn = true;
+            OnTurnStarted?.Invoke(PlayerSide.Blue);
+        }
     }
     public void UseMana(int amount)
     {

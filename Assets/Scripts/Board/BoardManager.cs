@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 public class BoardManager : MonoBehaviour
 {
@@ -16,6 +17,10 @@ public class BoardManager : MonoBehaviour
     private bool wasClickedThisFrame = false;
 
     private Mob selectedMob;
+
+    private float? cachedMidX = null;
+    private Case redBaseCaseCache;
+    private Case blueBaseCaseCache;
 
     private void Awake()
     {
@@ -85,7 +90,7 @@ public class BoardManager : MonoBehaviour
 
     public void EnableCollidersMobs()
     {
-        foreach (GameObject mob in allMobs)
+        foreach (GameObject mob in GetAllMobs())
         {
             Collider mobCollider = mob.GetComponentInChildren<Collider>();
             if (mobCollider != null)
@@ -97,7 +102,7 @@ public class BoardManager : MonoBehaviour
 
     public void DisableCollidersMobs()
     {
-        foreach (GameObject mob in allMobs)
+        foreach (GameObject mob in GetAllMobs())
         {
             Collider mobCollider = mob.GetComponentInChildren<Collider>();
             if (mobCollider != null)
@@ -109,7 +114,7 @@ public class BoardManager : MonoBehaviour
 
     public void MobsCanMove(bool state)
     {
-        foreach (GameObject mob in allMobs)
+        foreach (GameObject mob in GetAllMobs())
         {
             mob.GetComponent<Mob>().SetCanMove(state);
         }
@@ -123,11 +128,15 @@ public class BoardManager : MonoBehaviour
     public void AddMobToRedTeam(GameObject mob)
     {
         redTeam.Add(mob);
+        var m = mob.GetComponent<Mob>();
+        if (m != null) m.Team = Team.Red;
     }
 
     public void AddMobToBlueTeam(GameObject mob)
     {
         blueTeam.Add(mob);
+        var m = mob.GetComponent<Mob>();
+        if (m != null) m.Team = Team.Blue;
     }
 
     public void RemoveMobFromBoard(GameObject mob)
@@ -151,6 +160,151 @@ public class BoardManager : MonoBehaviour
         if (blueTeam.Contains(mob))
         {
             blueTeam.Remove(mob); 
+        }
+    }
+
+    public IEnumerable<GameObject> GetAllMobs()
+    {
+        // Prefer union of team lists to avoid divergence
+        return blueTeam.Concat(redTeam);
+    }
+
+    public IReadOnlyList<GameObject> GetBlueTeam() => blueTeam;
+    public IReadOnlyList<GameObject> GetRedTeam() => redTeam;
+
+    public GameObject SpawnMobAt(Case targetCase, GameObject mobPrefab, Team team)
+    {
+        if (targetCase == null || mobPrefab == null) return null;
+        if (targetCase.IsOccupied()) return null;
+        if (IsBaseCase(targetCase)) return null;
+
+        GameObject instance = Instantiate(mobPrefab, targetCase.transform.position + new Vector3(0, 0.5f, 0), Quaternion.identity);
+        var mobComp = instance.GetComponent<Mob>();
+        if (mobComp != null)
+        {
+            mobComp.SetCurrentCase(targetCase);
+        }
+        AddMobToBoard(instance);
+        if (team == Team.Blue)
+        {
+            AddMobToBlueTeam(instance);
+        }
+        else
+        {
+            AddMobToRedTeam(instance);
+        }
+        return instance;
+    }
+
+    private float GetBoardMidX()
+    {
+        if (cachedMidX.HasValue) return cachedMidX.Value;
+        if (cases == null || cases.Length == 0)
+        {
+            cachedMidX = 0f;
+            return cachedMidX.Value;
+        }
+        float minX = float.MaxValue, maxX = float.MinValue;
+        foreach (var c in cases)
+        {
+            if (c == null) continue;
+            float x = c.transform.position.x;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+        }
+        cachedMidX = (minX + maxX) * 0.5f;
+        return cachedMidX.Value;
+    }
+
+    public bool IsBaseCase(Case c)
+    {
+        if (c == null) return false;
+
+        // Resolve nearest case to base objects once, if provided
+        if (redBaseCaseCache == null && redBase != null)
+        {
+            redBaseCaseCache = FindNearestCaseTo(redBase.transform.position);
+        }
+        if (blueBaseCaseCache == null && blueBase != null)
+        {
+            blueBaseCaseCache = FindNearestCaseTo(blueBase.transform.position);
+        }
+
+        if (redBaseCaseCache != null && c == redBaseCaseCache) return true;
+        if (blueBaseCaseCache != null && c == blueBaseCaseCache) return true;
+
+        return false;
+    }
+
+    private Case FindNearestCaseTo(Vector3 position)
+    {
+        Case best = null;
+        float bestSqr = float.PositiveInfinity;
+        foreach (var g in cases)
+        {
+            if (g == null) continue;
+            var cc = g.GetComponent<Case>();
+            if (cc == null) continue;
+            float d = (cc.transform.position - position).sqrMagnitude;
+            if (d < bestSqr)
+            {
+                bestSqr = d;
+                best = cc;
+            }
+        }
+        return best;
+    }
+
+    public bool IsInBlueHalf(Case c)
+    {
+        if (c == null) return false;
+        float mid = GetBoardMidX();
+        bool redIsRight = true;
+        if (redBase != null)
+            redIsRight = redBase.transform.position.x > mid;
+        // Blue is the opposite half of Red
+        if (redIsRight)
+            return c.transform.position.x <= mid;
+        else
+            return c.transform.position.x > mid;
+    }
+
+    public bool IsInRedHalf(Case c)
+    {
+        if (c == null) return false;
+        float mid = GetBoardMidX();
+        bool redIsRight = true;
+        if (redBase != null)
+            redIsRight = redBase.transform.position.x > mid;
+        if (redIsRight)
+            return c.transform.position.x > mid;
+        else
+            return c.transform.position.x <= mid;
+    }
+
+    public IEnumerable<Case> GetFreeCasesForTeam(Team t)
+    {
+        foreach (var g in cases)
+        {
+            if (g == null) continue;
+            var c = g.GetComponent<Case>();
+            if (c == null) continue;
+            if (c.IsOccupied()) continue;
+            if (IsBaseCase(c)) continue;
+            if (t == Team.Blue && !IsInBlueHalf(c)) continue;
+            if (t == Team.Red && !IsInRedHalf(c)) continue;
+            yield return c;
+        }
+    }
+
+    public IEnumerable<Case> GetAllCases()
+    {
+        foreach (var g in cases)
+        {
+            if (g == null) continue;
+            var c = g.GetComponent<Case>();
+            if (c == null) continue;
+            yield return c;
         }
     }
 
