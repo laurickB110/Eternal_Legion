@@ -141,7 +141,9 @@ public class EnemyAIController : MonoBehaviour
                 break; // Rien à jouer
             }
 
-            var freeCases = boardManager.GetFreeCasesForTeam(Team.Red).ToList();
+            var freeCases = boardManager.GetFreeCasesForTeam(Team.Red)
+                .Where(c => c != null && !boardManager.IsBaseCase(c))
+                .ToList();
             if (freeCases.Count == 0)
             {
                 if (debugAI) Debug.Log("[AI] No free red-half cells to summon.");

@@ -19,8 +19,9 @@ public class BoardManager : MonoBehaviour
     private Mob selectedMob;
 
     private float? cachedMidX = null;
-    private Case redBaseCaseCache;
-    private Case blueBaseCaseCache;
+    [SerializeField] float baseExclusionMargin = 1.0f; // expand XZ bounds to fully cover underlying cases
+    private List<Case> redBaseCasesCache = null;
+    private List<Case> blueBaseCasesCache = null;
 
     private void Awake()
     {
@@ -219,40 +220,162 @@ public class BoardManager : MonoBehaviour
     public bool IsBaseCase(Case c)
     {
         if (c == null) return false;
-
-        // Resolve nearest case to base objects once, if provided
-        if (redBaseCaseCache == null && redBase != null)
-        {
-            redBaseCaseCache = FindNearestCaseTo(redBase.transform.position);
-        }
-        if (blueBaseCaseCache == null && blueBase != null)
-        {
-            blueBaseCaseCache = FindNearestCaseTo(blueBase.transform.position);
-        }
-
-        if (redBaseCaseCache != null && c == redBaseCaseCache) return true;
-        if (blueBaseCaseCache != null && c == blueBaseCaseCache) return true;
-
+        BuildBaseAreasIfNeeded();
+        if (redBaseCasesCache != null && redBaseCasesCache.Contains(c)) return true;
+        if (blueBaseCasesCache != null && blueBaseCasesCache.Contains(c)) return true;
         return false;
     }
 
-    private Case FindNearestCaseTo(Vector3 position)
+    private void BuildBaseAreasIfNeeded()
     {
-        Case best = null;
-        float bestSqr = float.PositiveInfinity;
-        foreach (var g in cases)
+        if (redBaseCasesCache == null || blueBaseCasesCache == null)
         {
-            if (g == null) continue;
-            var cc = g.GetComponent<Case>();
-            if (cc == null) continue;
-            float d = (cc.transform.position - position).sqrMagnitude;
-            if (d < bestSqr)
+            redBaseCasesCache = new List<Case>();
+            blueBaseCasesCache = new List<Case>();
+
+            EnsureBaseReferences();
+
+            if (redBase != null)
             {
-                bestSqr = d;
-                best = cc;
+                var area = GetXZBounds(redBase);
+                if (area.HasValue)
+                {
+                    foreach (var c in GetAllCases())
+                    {
+                        Vector3 p = c.transform.position;
+                        if (IsInsideXZ(area.Value, p)) redBaseCasesCache.Add(c);
+                    }
+                }
+            }
+
+            if (blueBase != null)
+            {
+                var area = GetXZBounds(blueBase);
+                if (area.HasValue)
+                {
+                    foreach (var c in GetAllCases())
+                    {
+                        Vector3 p = c.transform.position;
+                        if (IsInsideXZ(area.Value, p)) blueBaseCasesCache.Add(c);
+                    }
+                }
+            }
+
+            // Fallback: if one or both bases not found, try to infer by name and side
+            if (redBase == null || blueBase == null)
+            {
+                var allBaseLike = FindBaseLikeObjects();
+                float mid = GetBoardMidX();
+                foreach (var go in allBaseLike)
+                {
+                    var area2 = GetXZBounds(go);
+                    if (!area2.HasValue) continue;
+                    bool goesToRed = go.transform.position.x > mid; // right side assumed red
+                    foreach (var c in GetAllCases())
+                    {
+                        Vector3 p = c.transform.position;
+                        if (IsInsideXZ(area2.Value, p))
+                        {
+                            if (goesToRed)
+                            {
+                                if (!redBaseCasesCache.Contains(c)) redBaseCasesCache.Add(c);
+                            }
+                            else
+                            {
+                                if (!blueBaseCasesCache.Contains(c)) blueBaseCasesCache.Add(c);
+                            }
+                        }
+                    }
+                }
             }
         }
-        return best;
+    }
+
+    private void EnsureBaseReferences()
+    {
+        if (redBase == null)
+        {
+            redBase = FindByNameSubstring("RedBase") ?? FindByNameSubstring("Red Base");
+        }
+        if (blueBase == null)
+        {
+            blueBase = FindByNameSubstring("BlueBase") ?? FindByNameSubstring("Blue Base");
+        }
+    }
+
+    private GameObject FindByNameSubstring(string contains)
+    {
+        var all = FindObjectsOfType<Transform>();
+        foreach (var t in all)
+        {
+            if (t == null || t.gameObject == null) continue;
+            string name = t.gameObject.name;
+            if (name != null && name.IndexOf(contains, System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return t.gameObject;
+            }
+        }
+        return null;
+    }
+
+    private List<GameObject> FindBaseLikeObjects()
+    {
+        var list = new List<GameObject>();
+        var all = FindObjectsOfType<Transform>();
+        foreach (var t in all)
+        {
+            if (t == null || t.gameObject == null) continue;
+            string name = t.gameObject.name;
+            if (string.IsNullOrEmpty(name)) continue;
+            if (name.IndexOf("Base", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                list.Add(t.gameObject);
+            }
+        }
+        return list;
+    }
+
+    private struct XZBounds
+    {
+        public float minX, maxX, minZ, maxZ;
+    }
+
+    private XZBounds? GetXZBounds(GameObject root)
+    {
+        if (root == null) return null;
+        bool any = false;
+        var renderers = root.GetComponentsInChildren<Renderer>();
+        Bounds b = new Bounds(root.transform.position, Vector3.zero);
+        foreach (var r in renderers)
+        {
+            if (r == null) continue;
+            if (!any) { b = r.bounds; any = true; }
+            else b.Encapsulate(r.bounds);
+        }
+        if (!any)
+        {
+            var colliders = root.GetComponentsInChildren<Collider>();
+            foreach (var col in colliders)
+            {
+                if (col == null) continue;
+                if (!any) { b = col.bounds; any = true; }
+                else b.Encapsulate(col.bounds);
+            }
+        }
+        if (!any) return null;
+
+        return new XZBounds
+        {
+            minX = b.min.x - baseExclusionMargin,
+            maxX = b.max.x + baseExclusionMargin,
+            minZ = b.min.z - baseExclusionMargin,
+            maxZ = b.max.z + baseExclusionMargin
+        };
+    }
+
+    private bool IsInsideXZ(XZBounds bounds, Vector3 p)
+    {
+        return p.x >= bounds.minX && p.x <= bounds.maxX && p.z >= bounds.minZ && p.z <= bounds.maxZ;
     }
 
     public bool IsInBlueHalf(Case c)
