@@ -4,7 +4,7 @@ using TMPro;
 
 public enum Team { Blue, Red }
 
-public class Mob : MonoBehaviour
+public class Mob : MonoBehaviour, IAttackable
 {
     [SerializeField] TextMeshProUGUI healthText;
     [SerializeField] TextMeshProUGUI attackText;
@@ -93,20 +93,34 @@ public class Mob : MonoBehaviour
         moveCoroutine = null; // Reset
     }
 
-    public void AttackMob(Mob target)
+    public void AttackMob(IAttackable target)
     {
         if (target == null) return;
-
-        target.SetHealth(target.GetHealth() - attack);
-        if (target.GetHealth() <= 0)
+        if (target is Mob)
         {
-            // Le mob est mort, gérer la suppression
-            if (target.GetCurrentCase() != null)
+            Mob targetMob = target as Mob;
+            targetMob.SetHealth(targetMob.GetHealth() - attack);
+            if (targetMob.GetHealth() <= 0)
             {
-                target.GetCurrentCase().SetOccupied(false, null);
-                target.RemoveFromList();
+                // Le mob est mort, gérer la suppression
+                if (targetMob.GetCurrentCase() != null)
+                {
+                    targetMob.GetCurrentCase().SetOccupied(false, null);
+                    targetMob.RemoveFromList();
+                }
             }
         }
+        if (target is Base)
+        {
+            Base targetBase = target as Base;
+            targetBase.SetHealth(targetBase.GetHealth() - attack);
+            if (targetBase.GetHealth() <= 0)
+            {
+                // La base est détruite, gérer la fin de partie
+                Debug.Log("Base destroyed! Game Over.");
+            }
+        }
+
     }
 
     public void RemoveFromList()
