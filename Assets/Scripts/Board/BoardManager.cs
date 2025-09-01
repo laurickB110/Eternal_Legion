@@ -366,7 +366,7 @@ public class BoardManager : MonoBehaviour
 
                         if (manhattanDist <= selectedMob.GetMovementRange() && !caseTouched.GetComponent<Case>().IsOccupied())
                         {
-                            selectedMob.MoveTo(targetPos + new Vector3(0, 1, 0)); // léger offset en Y
+                            selectedMob.MoveTo(targetPos + new Vector3(0, 0.5f, 0)); // léger offset en Y
                             selectedMob.SetCurrentCase(caseTouched.GetComponent<Case>());
                             selectedMob.SetCanMove(false);
                         }

@@ -567,7 +567,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cardVisual: {fileID: 6743717837496926308}
-  mob: {fileID: 8419855019567464053, guid: 17d904ef483b9a34a949df160dec6f0e, type: 3}
+  mob: {fileID: 1194953125316998873, guid: 9d528b2cdc2ea6a458d19607331c38e6, type: 3}
   Hand: {fileID: 0}
   HandCard: {fileID: 5230898712554694131}
 --- !u!114 &267201348729137250
