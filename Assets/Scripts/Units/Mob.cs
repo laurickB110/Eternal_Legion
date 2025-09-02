@@ -114,6 +114,7 @@ public class Mob : MonoBehaviour, IAttackable
         {
             Base targetBase = target as Base;
             targetBase.SetHealth(targetBase.GetHealth() - attack);
+            Debug.Log($"Base health is now: {targetBase.GetHealth()}");
             if (targetBase.GetHealth() <= 0)
             {
                 // La base est détruite, gérer la fin de partie

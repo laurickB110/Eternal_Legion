@@ -35,6 +35,11 @@ public class BoardManager : MonoBehaviour
         }
     }
 
+    void Start()
+    {
+        BuildBaseAreasIfNeeded();
+    }
+
     public void HighlightMovableCells(Vector3 mobPos, int range)
     {
         float caseSize = 2f;
@@ -219,11 +224,29 @@ public class BoardManager : MonoBehaviour
 
     public bool IsBaseCase(Case c)
     {
+        Debug.Log("IsBaseCase check", c);
         if (c == null) return false;
-        BuildBaseAreasIfNeeded();
         if (redBaseCasesCache != null && redBaseCasesCache.Contains(c)) return true;
         if (blueBaseCasesCache != null && blueBaseCasesCache.Contains(c)) return true;
         return false;
+    }
+
+    // Returns the Base component whose area covers the given case, or null
+    public Base GetBaseUnderCase(Case c)
+    {
+        if (c == null) return null;
+        BuildBaseAreasIfNeeded();
+        if (redBaseCasesCache != null && redBaseCasesCache.Contains(c))
+        {
+            EnsureBaseReferences();
+            return redBase != null ? redBase.GetComponent<Base>() : null;
+        }
+        if (blueBaseCasesCache != null && blueBaseCasesCache.Contains(c))
+        {
+            EnsureBaseReferences();
+            return blueBase != null ? blueBase.GetComponent<Base>() : null;
+        }
+        return null;
     }
 
     private void BuildBaseAreasIfNeeded()
@@ -469,6 +492,14 @@ public class BoardManager : MonoBehaviour
         if (Input.GetMouseButtonDown(0))
         {
             if (selectedMob == null) return;
+            foreach(Case c in redBaseCasesCache)
+            {
+                Debug.Log("redbasecase", c);
+            }
+            foreach(Case c in blueBaseCasesCache)
+            {
+                Debug.Log("bluebasecase", c);
+            }
 
             if (selectedMob.IsOnMove())
             {
@@ -500,7 +531,7 @@ public class BoardManager : MonoBehaviour
                 ClearHighlights();
                 EnableCollidersMobs();
             }
-            
+
             else if (selectedMob.IsOnAttack())
             {
                 float caseSize = 2f;
@@ -518,13 +549,29 @@ public class BoardManager : MonoBehaviour
                         int distZ = Mathf.Abs(Mathf.RoundToInt((mobPos.z - targetPos.z) / caseSize));
                         int manhattanDist = distX + distZ;
 
-                        if (manhattanDist <= selectedMob.GetAttackRange() && caseTouched.GetComponent<Case>().IsOccupied() && caseTouched.GetComponent<Case>() != selectedMob.GetCurrentCase())
+                        if (manhattanDist <= selectedMob.GetAttackRange() && caseTouched.GetComponent<Case>() != selectedMob.GetCurrentCase())
                         {
-                            // Mettre ici la logique pour l'attaque
-                            Mob targetMob = caseTouched.GetComponent<Case>().GetOccupyingMob();
-                            selectedMob.AttackMob(targetMob);
-                            Debug.Log($"{selectedMob.name} attaque la case en {targetPos}");
-                            selectedMob.SetCanAttack(false);
+                            var targetCase = caseTouched.GetComponent<Case>();
+
+                            // 1) If a mob is on the case, attack it
+                            if (targetCase.IsOccupied())
+                            {
+                                Mob targetMob = targetCase.GetOccupyingMob();
+                                selectedMob.AttackMob(targetMob);
+                                Debug.Log($"{selectedMob.name} attaque la case en {targetPos}");
+                                selectedMob.SetCanAttack(false);
+                            }
+                            // 2) Else, if this case belongs to a base area, attack the base
+                            else if (IsBaseCase(targetCase))
+                            {
+                                var targetBase = GetBaseUnderCase(targetCase);
+                                if (targetBase != null)
+                                {
+                                    selectedMob.AttackMob(targetBase);
+                                    Debug.Log($"{selectedMob.name} attaque la base via la case en {targetPos}");
+                                    selectedMob.SetCanAttack(false);
+                                }
+                            }
                         }
                     }
                 }
